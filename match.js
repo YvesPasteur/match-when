@@ -1,17 +1,5 @@
 'use strict';
 
-const _catchAllSymbol = Symbol('match.pattern.catchAll');
-const _patternOR = Symbol('match.pattern.OR');
-const _patternORStr = _patternOR.toString(); // dirty hack
-const _patternAND = Symbol('match.pattern.AND');
-const _patternANDStr = _patternAND.toString(); // dirty hack
-const _patternRANGE = Symbol('match.pattern.RANGE');
-const _patternRANGEStr = _patternRANGE.toString(); // dirty hack
-
-const _patternREGEXP = Symbol('match.pattern.REGEXP');
-const _patternREGEXPStr = _patternREGEXP.toString(); // dirty hack
-const EXTRACT_PATTERN_AND_FLAGS = /\/(.*)\/(.*)/;
-
 function MissingCatchAllPattern() {
   Error.call(this, 'Missing when() catch-all pattern as last match argument, add [when()]: void 0');
   if (!('stack' in this)){
@@ -21,162 +9,171 @@ function MissingCatchAllPattern() {
 
 MissingCatchAllPattern.prototype = Object.create(Error.prototype);
 
-function match(/* args... */){
-  const args = Array.from(arguments),
-    obj = args[args.length-1];
+/**
+ * Take one argument (function) or two (value to match and function)
+ * @returns {*}
+ */
+function match(/* args... */) {
+  const args = Array.from(arguments);
 
-  // pre-compute matchers
-  let matchers = [];
-
-  for(let key in obj){
-    matchers.push(when.unserialize(key, obj[key]));
+  if (args.length > 1) {
+    return immediateMatch(args[1], args[0]);
   }
+  return postponeMatch(args[0]);
+}
 
-  // since JS objects are unordered we need to reorder what for..in give us even if the order was already right
-  // because it depends on the JS engine implementation. See #2
-  matchers.sort(function(a, b){
-    return a.position < b.position ? -1 : 1;
-  });
+/**
+ *
+ * @param {Function} lambda
+ * @returns {Function} unapplied match
+ */
+function postponeMatch(lambda) {
+  const f = value => {
+    const res = lambda(patternizor(value));
 
-  if(Object.getOwnPropertySymbols(obj).indexOf(_catchAllSymbol) !== -1){
-    matchers.push(when.unserialize(_catchAllSymbol, obj[_catchAllSymbol]));
-  }
-
-  const calculateResult = function(input){
-    const matched = matchers.find((matcher) => matcher.match(input));
-
-    if (!matched) {
+    if (res === false) {
       throw new MissingCatchAllPattern();
     }
 
-    return typeof matched.result === 'function' ? matched.result(input) : matched.result;
+    if (res.unwrap) {
+      return res.unwrap();
+    }
+    return res;
   };
 
-  return args.length === 2 ? calculateResult(args[0]) : calculateResult;
+  return f;
 }
 
+/**
+ *
+ * @param {Function} lambda
+ * @param mied value Value to applied to the match
+ * @returns {*}
+ */
+function immediateMatch(lambda, value) {
+  return postponeMatch(lambda)(value);
+}
 
-function when(props){
-  if(props === undefined){
-    return _catchAllSymbol;
+/**
+ * the patternizor function will return a pattern object and keep the value to match in its
+ * scope
+ *
+ *
+ * @param {mixed} value Value to match
+ * @returns {pattern}
+ */
+function patternizor(value) {
+  /**
+   *
+   * @param mixed against undefined to match everything, elsewhere value to match against
+   * @returns {boolean} Simple matching result
+   */
+  function pattern(against) {
+    return against === undefined || _matching(against, value);
+  };
+
+  /**
+   * @param start
+   * @param end
+   * @returns {boolean}
+   */
+  pattern.range = function(start, end) {
+    return start <= value && value <= end;
+  };
+
+  /**
+   * Define a head and a tail attributes to the pattern object if the value matches
+   *
+   * @returns {boolean} True if the value to match is an array with at least one element
+   */
+  pattern.headTail = function() {
+    if(!Array.isArray(value)){
+      return false;
+    }
+
+    if (value.length === 0) {
+      return false;
+    }
+    pattern.head = value[0];
+    pattern.tail = value.slice(1);
+
+    return true;
+  };
+
+  /**
+   *@returns {*} True if the value matches all the arguments given to the and function
+   */
+  pattern.and = function(/* args... */) {
+    const args = Array.from(arguments);
+
+    return args.every((arg) => _matching(arg, value));
+  };
+
+  /**
+   * @returns {*} True if the value matches at least one of the arguments given to the or function
+   */
+  pattern.or = function(/* args... */) {
+    const args = Array.from(arguments);
+
+    return args.some((arg) => _matching(arg, value));
+  }
+
+  /**
+   * @type {mixed} Store and expose the value to be used in the right member of the pattern
+   * matching
+   */
+  pattern.value = value;
+
+  /**
+   * Yes, the use || and && is a little workaround...
+   * And this wrapper is the drawback. To return falsy values (false, 0, ...), you must
+   * wrap them to the matching condition be satisfied.
+   * The match function will be in charge to unwrap it.
+   *
+   * Hey, what do you expect ?
+   *
+   * @param {mixed} res value to wrap
+   */
+  pattern.wrapper = (res) => (
+    {
+      'unwrap': () => res
+    }
+  );
+
+  return pattern;
+}
+
+/**
+ * Simple matching of the two arguments
+ *
+ * @param props
+ * @param input
+ * @returns {*}
+ * @private
+ */
+function _matching(props, input){
+  // implement array matching
+  if(Array.isArray(input)){
+    // @todo yes this is a quick and dirty way, optimize this
+    return JSON.stringify(props) === JSON.stringify(input);
   }
 
   if(props instanceof RegExp){
-    return _serialize([_patternREGEXP.toString(), props.toString()]);
+    return props.test(input);
   }
 
-  return _serialize(props);
-}
-
-when.__uid = 0;
-
-// Any -> String
-function _serialize(mixed){
-  return JSON.stringify([when.__uid++, mixed]);
-}
-
-// String -> [Number, Any]
-function _unserialize(str){
-  return JSON.parse(str);
-}
-
-function _true(){return true;}
-
-// Any -> String
-function _match(props){
-
-  if(Array.isArray(props)){
-    if(props[0] === _patternORStr){
-      props.shift();
-      return function(input){
-        return props[0].some((prop) => _matching(prop, input));
-      };
-    }
-
-    if(props[0] === _patternANDStr){
-      props.shift();
-      return function(input){
-        return props[0].every((prop) => _matching(prop, input));
-      };
-    }
-
-    if(props[0] === _patternRANGEStr){
-      props.shift();
-      return function(input){
-        return props[0] <= input && input <= props[1];
-      };
-    }
-
-    if(props[0] === _patternREGEXPStr){
-      const res = EXTRACT_PATTERN_AND_FLAGS.exec(props[1]);
-      return _matching.bind(null, new RegExp(res[1], res[2]));
-    }
-  }
-
-  function _matching(props, input){
-    // implement array matching
-    if(Array.isArray(input)){
-      // @todo yes this is a quick and dirty way, optimize this
-      return JSON.stringify(props) === JSON.stringify(input);
-    }
-
-    if(props instanceof RegExp){
-      return props.test(input);
-    }
-
-    if(typeof input === 'object'){
-      for(let prop in props){
-        if(input[prop] !== props[prop]){
-          return false;
-        }
+  if(typeof input === 'object'){
+    for(let prop in props){
+      if(input[prop] !== props[prop]){
+        return false;
       }
-      return true;
     }
-
-    return props === input;
+    return true;
   }
 
-  return (input) => _matching(props, input);
+  return props === input;
 }
-
-// mixed -> String
-when.or = function(/* args... */){
-  return _serialize([_patternOR.toString(), Array.prototype.slice.call(arguments)]);
-};
-
-// mixed -> String
-// upcoming...
-when.and = function(/* args... */){
-  return _serialize([_patternAND.toString(), Array.prototype.slice.call(arguments)]);
-};
-
-when.range = function(start, end){
-  return _serialize([_patternRANGE.toString(), start, end]);
-};
-
-when.unserialize = function(serializedKey, value){
-
-  if(serializedKey === _catchAllSymbol){
-    return {
-      match: _true,
-      result: value,
-      position: Infinity
-    };
-  }
-
-  // const {position, matcherConfiguration} = _unserialize(serializedKey);
-  const deserialized = _unserialize(serializedKey);
-  const matcherConfiguration = deserialized[1];
-  const position = deserialized[0];
-
-  return {
-    match: _match(matcherConfiguration),
-    result: value,
-    position: position
-  };
-};
 
 module.exports = {
-  match,
-  when
+  match
 };

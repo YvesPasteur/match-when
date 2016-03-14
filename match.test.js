@@ -1,17 +1,16 @@
 'use strict';
-const when = require('./match').when;
-const match = require('./match').match;
 
-// var match = require('./');
+const match = require('./match').match;
 const t = require('chai').assert;
 
 describe('when multiple values can be hit', () => {
   it("doesn't hit the first one",  () => {
-    t.strictEqual(match({
-      [when.range(0, 43)]: 42,
-      [when(42)]: 72,
-      [when()]: 'should never be hit',
-    })(42), 42);
+    t.strictEqual(match(
+      pattern =>
+        pattern.range(0, 43) && 42
+        || pattern(42) && 72
+        || pattern() && 'should never be hit'
+    )(42), 42);
   });
 });
 
@@ -19,18 +18,21 @@ describe('match', () => {
   const input = [{protocol: 'HTTP', i:10}, {protocol: 'AMQP', i:11}, {protocol: 'AMQP', i:5}, {protocol: 'WAT', i:3}];
 
   it('does not require a catch-all at the definition of the match', () => {
-    t.doesNotThrow(() => match({
-      [when({protocol:'HTTP'})]: (o) => o.i+1,
-      [when({protocol:'AMQP'})]: (o) => o.i+2,
-    }));
+    t.doesNotThrow(() => match(
+      pattern =>
+        pattern({protocol:'HTTP'}) && ((o) => o.i+1)(pattern.value)
+        || pattern({protocol:'HTTP'}) && ((o) => o.i+1)(pattern.value)
+        || when({protocol:'AMQP'}) && ((o) => o.i+2)(pattern.value)
+    ));
   });
 
   describe('when matching without a catch-all', function () {
     beforeEach(function () {
-      this.doMatch = match({
-        [when('value')]: 42,
-        [when('other value')]: 99
-      });
+      this.doMatch = match(
+        pattern =>
+          pattern('value') && 42
+          || pattern('other value') && 99
+      );
     });
 
     it('works when a match is hit', function () {
@@ -47,10 +49,11 @@ describe('match', () => {
   describe('match(<input>, specification)', () => {
     it('instantly performs the match, rather than returning a function', function () {
       t.strictEqual(
-        match('value', {
-          [when('value')]: 42,
-          [when()]: 99
-        }),
+        match('value',
+          pattern =>
+            pattern('value') && 42
+            || pattern() && 99
+        ),
         42
       );
     });
@@ -58,10 +61,11 @@ describe('match', () => {
     describe('the example in the docs', function () {
       it('works correctly', function () {
         function fact(n){
-          return match(n, {
-            [when(0)]: 1,
-            [when()]: (n) => n * fact(n-1)
-          });
+          return match(n,
+            pattern =>
+              pattern(0) && 1
+              || pattern() && ((n) => n * fact(n-1))(pattern.value)
+          );
         }
 
         t.deepEqual(fact(10), 3628800);
@@ -71,36 +75,39 @@ describe('match', () => {
 
   describe('matching', () => {
     it('matches objects based on properties', () => {
-      const output = input.map(match({
-        [when({protocol:'HTTP', i:12})]: (o) => 1000,
-        [when({protocol:'HTTP'})]: (o) => o.i+1,
-        [when({protocol:'AMQP', i:12})]: (o) => 1001,
-        [when({protocol:'AMQP'})]: (o) => o.i+2,
-        [when()]: (o) => 0,
-      }));
+      const output = input.map(match(
+        pattern =>
+          pattern({protocol:'HTTP', i:12}) && (((o) => 1000)(pattern.value))
+          || pattern({protocol:'HTTP'}) && (((o) => o.i+1)(pattern.value))
+          || pattern({protocol:'AMQP', i:12}) && (((o) => 1001)(pattern.value))
+          || pattern({protocol:'AMQP'}) && (((o) => o.i+2)(pattern.value))
+          || pattern() && (((o) => 0)(pattern.value))
+      ));
 
       t.deepEqual(output, [11, 13, 7, 0]);
     });
 
 
     it('matches arrays based on indexes and content', () => {
-      const output = [['a', 'b'], ['c'], ['d', 'e', 1]].map(match({
-        [when(['c'])]: 1000,
-        [when(['a', 'b'])]: 1001,
-        [when([])]: 1002,
-        [when(['d', 'e', 1])]: 1003,
-        [when()]: (o) => 0
-      }));
+      const output = [['a', 'b'], ['c'], ['d', 'e', 1]].map(match(
+        pattern =>
+          pattern(['c']) && 1000
+          || pattern(['a', 'b']) && 1001
+          || pattern([]) && 1002
+          || pattern(['d', 'e', 1]) && 1003
+          || pattern() && (((o) => 0)(pattern.value))
+      ));
 
       t.deepEqual(output, [1001, 1000, 1003]);
     });
 
     it('matches number as well', () => {
-      function fact(n){
-        return match({
-          [when(0)]: 1,
-          [when()]: (n) => n * fact(n-1) // when() === catch-all
-        })(n);
+      function fact(n) {
+        return match(
+            pattern =>
+          pattern(0) && 1
+          || pattern() && (((n) => n * fact(n - 1))(pattern.value)) // pattern() === catch-all
+        )(n);
       }
 
       t.strictEqual(fact(10),3628800);
@@ -108,11 +115,11 @@ describe('match', () => {
 
     it('matches empty array', () => {
       function length(list){
-        return match({
-          [when([])]: 0,
-          // [when()]: ([head, ...tail]) => 1 + length(tail) // still does not work in v5.3.0
-          [when()]: (arr) => 1 + length(arr.slice(1))
-        })(list);
+        return match(
+          pattern =>
+            pattern([]) && pattern.wrapper(0)
+            || pattern.headTail() && (((head, tail) => 1 + length(tail))(pattern.head, pattern.tail))
+        )(list);
       }
 
       t.strictEqual(length([1, 2, 3]), 3);
@@ -120,31 +127,35 @@ describe('match', () => {
     });
 
     it('supports regexp match', () => {
-      const output = [3, ' 2', 1, 'zEro', 90].map(match({
-        [when(/1/)]: 'one',
-        [when(/2/g)]: 'two',
-        [when(/3/)]: 'three',
-        [when(/zero/i)]: 'zero',
-        [when()]: v => v
-      }));
+      const output = [3, ' 2', 1, 'zEro', 90].map(match(
+        pattern =>
+          pattern(/1/) && 'one'
+          || pattern(/2/g) && 'two'
+          || pattern(/3/) && 'three'
+          || pattern(/zero/i) && 'zero'
+          || pattern() && pattern.value
+      ));
 
       t.deepEqual(output, ['three', 'two', 'one', 'zero', 90]);
 
-      const invalidEmails = ['hey.com', 'fg@plop.com', 'fg+plop@plop.com', 'wat'].filter(match({
-        [when(/\S+@\S+\.\S+/)]: false, // **seems** to be a valid email
-        [when()]: true // the email may be invalid, return it
-      }));
+      const invalidEmails = ['hey.com', 'fg@plop.com', 'fg+plop@plop.com', 'wat']
+        .filter(match(
+        pattern =>
+          pattern(/\S+@\S+\.\S+/) && pattern.wrapper(false) // **seems** to be a valid email
+          || pattern() && true // the email may be invalid, return it
+      ));
 
       t.deepEqual(invalidEmails, ['hey.com', 'wat']);
-    })
+    });
 
     describe('when.and', () => {
       it('supports AND conditional', () => {
-        const output = input.map(match({
-          [when.and({protocol:'AMQP'}, {i:5})]: o => o.i,
-          [when.and({protocol:'HTTP'}, {i:10})]: o => o.i,
-          [when()]: (o) => 0,
-        }));
+        const output = input.map(match(
+          pattern =>
+            pattern.and({protocol:'AMQP'}, {i:5}) && ((o => o.i)(pattern.value))
+            || pattern.and({protocol:'HTTP'}, {i:10}) && ((o => o.i)(pattern.value))
+            || pattern() && ((o => 0)(pattern.value))
+        ));
 
         t.deepEqual(output, [10, 0, 5, 0]);
       })
@@ -155,11 +166,12 @@ describe('match', () => {
         // example from https://kerflyn.wordpress.com/2011/02/14/playing-with-scalas-pattern-matching/
 
         function parseArgument(arg){
-          return match({
-            [when.or("-h", "--help")]: () => displayHelp,
-            [when.or("-v", "--version")]: () => displayVersion,
-            [when()]: (whatever) => unknownArgument.bind(null, whatever)
-          })(arg);
+          return match(
+            pattern =>
+              pattern.or("-h", "--help") &&  (() => displayHelp)(pattern.value)
+              || pattern.or("-v", "--version") && (() => displayVersion)(pattern.value)
+              || pattern() && (whatever => unknownArgument.bind(null, whatever))(pattern.value)
+          )(arg);
         }
 
         function displayHelp(){
@@ -190,10 +202,11 @@ describe('match', () => {
       rangeEnd = 5;
 
     beforeEach(function () {
-      this.withinRange = match({
-        [when.range(rangeStart, rangeEnd)]: true,
-        [when()]: false
-      });
+      this.withinRange = match(
+        pattern =>
+          pattern.range(rangeStart, rangeEnd) && true
+          || pattern() && pattern.wrapper(false)
+      );
     });
 
     describe('given a value within the range', function () {
@@ -228,12 +241,13 @@ describe('match', () => {
 
     describe('the example in the docs', function () {
       it('works correctly', function () {
-        var result = [12, 42, 99, 101].map(match({
-          [when.range(0, 41)]: '< answer',
-          [when.range(43, 100)]: '> answer',
-          [when(42)]: 'answer',
-          [when()]: '< 0, or > 100'
-        }));
+        var result = [12, 42, 99, 101].map(match(
+          pattern =>
+            pattern.range(0, 41) && '< answer'
+            || pattern.range(43, 100) && '> answer'
+            || pattern(42) && 'answer'
+            || pattern() && '< 0, or > 100'
+        ));
 
         var expected = ['< answer', 'answer', '> answer', '< 0, or > 100']
 
@@ -245,11 +259,12 @@ describe('match', () => {
 
   describe('yielding', () => {
     it('yields primitive values', () => {
-      const output = input.map(match({
-        [when({protocol:'HTTP'})]: 1,
-        [when({protocol:'AMQP'})]: 2,
-        [when()]: 0,
-      }));
+      const output = input.map(match(
+        pattern =>
+          pattern({protocol:'HTTP'}) && 1
+          || pattern({protocol:'AMQP'}) && 2
+          || pattern() && 0
+      ));
 
       t.deepEqual(output, [1, 2, 2, 0]);
     });
