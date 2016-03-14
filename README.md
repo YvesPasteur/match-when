@@ -1,3 +1,9 @@
+WARNING : This README is not up to date !!!
+Go to the match.test.js for see the usage.
+
+
+
+
 ### match-when - Pattern matching for modern JavaScript 
 
 
