@@ -39,9 +39,6 @@ function postponeMatch(lambda) {
       return res(value);
     }
 
-    if (res.unwrap) {
-      return res.unwrap();
-    }
     return res;
   };
 
@@ -133,22 +130,6 @@ function patternizor(value) {
    * @type {boolean}
    */
   pattern.with = false;
-
-  /**
-   * Yes, the use || and && is a little workaround...
-   * And this wrapper is the drawback. To return falsy values (false, 0, ...), you must
-   * wrap them to the matching condition be satisfied.
-   * The match function will be in charge to unwrap it.
-   *
-   * Hey, what do you expect ?
-   *
-   * @param {mixed} res value to wrap
-   */
-  pattern.wrapper = (res) => (
-    {
-      'unwrap': () => res
-    }
-  );
 
   return pattern;
 }

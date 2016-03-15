@@ -117,7 +117,7 @@ describe('match', () => {
       function length(list){
         return match(
           p => p.with
-            || p([]) && p.wrapper(0)
+            || p([]) && (o => 0)
             || p.headTail() && (((head, tail) => 1 + length(tail))(p.head, p.tail))
         )(list);
       }
@@ -141,7 +141,7 @@ describe('match', () => {
       const invalidEmails = ['hey.com', 'fg@plop.com', 'fg+plop@plop.com', 'wat']
         .filter(match(
           p => p.with
-            || p(/\S+@\S+\.\S+/) && p.wrapper(false) // **seems** to be a valid email
+            || p(/\S+@\S+\.\S+/) && (o => false) // **seems** to be a valid email
             || p() && true // the email may be invalid, return it
       ));
 
@@ -205,7 +205,7 @@ describe('match', () => {
       this.withinRange = match(
         p => p.with
           || p.range(rangeStart, rangeEnd) && true
-          || p() && p.wrapper(false)
+          || p() && (o => false)
       );
     });
 
