@@ -35,6 +35,10 @@ function postponeMatch(lambda) {
       throw new MissingCatchAllPattern();
     }
 
+    if (typeof res === 'function') {
+      return res(value);
+    }
+
     if (res.unwrap) {
       return res.unwrap();
     }

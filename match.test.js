@@ -20,9 +20,9 @@ describe('match', () => {
   it('does not require a catch-all at the definition of the match', () => {
     t.doesNotThrow(() => match(
       pattern =>
-        pattern({protocol:'HTTP'}) && ((o) => o.i+1)(pattern.value)
-        || pattern({protocol:'HTTP'}) && ((o) => o.i+1)(pattern.value)
-        || when({protocol:'AMQP'}) && ((o) => o.i+2)(pattern.value)
+        pattern({protocol:'HTTP'}) && ((o) => o.i+1)
+        || pattern({protocol:'HTTP'}) && ((o) => o.i+1)
+        || when({protocol:'AMQP'}) && ((o) => o.i+2)
     ));
   });
 
@@ -64,7 +64,7 @@ describe('match', () => {
           return match(n,
             pattern =>
               pattern(0) && 1
-              || pattern() && ((n) => n * fact(n-1))(pattern.value)
+              || pattern() && ((n) => n * fact(n-1))
           );
         }
 
@@ -77,11 +77,11 @@ describe('match', () => {
     it('matches objects based on properties', () => {
       const output = input.map(match(
         pattern =>
-          pattern({protocol:'HTTP', i:12}) && (((o) => 1000)(pattern.value))
-          || pattern({protocol:'HTTP'}) && (((o) => o.i+1)(pattern.value))
-          || pattern({protocol:'AMQP', i:12}) && (((o) => 1001)(pattern.value))
-          || pattern({protocol:'AMQP'}) && (((o) => o.i+2)(pattern.value))
-          || pattern() && (((o) => 0)(pattern.value))
+          pattern({protocol:'HTTP', i:12}) && ((o) => 1000)
+          || pattern({protocol:'HTTP'}) && ((o) => o.i+1)
+          || pattern({protocol:'AMQP', i:12}) && ((o) => 1001)
+          || pattern({protocol:'AMQP'}) && ((o) => o.i+2)
+          || pattern() && ((o) => 0)
       ));
 
       t.deepEqual(output, [11, 13, 7, 0]);
@@ -95,7 +95,7 @@ describe('match', () => {
           || pattern(['a', 'b']) && 1001
           || pattern([]) && 1002
           || pattern(['d', 'e', 1]) && 1003
-          || pattern() && (((o) => 0)(pattern.value))
+          || pattern() && ((o) => 0)
       ));
 
       t.deepEqual(output, [1001, 1000, 1003]);
@@ -106,7 +106,7 @@ describe('match', () => {
         return match(
             pattern =>
           pattern(0) && 1
-          || pattern() && (((n) => n * fact(n - 1))(pattern.value)) // pattern() === catch-all
+          || pattern() && ((n) => n * fact(n - 1)) // pattern() === catch-all
         )(n);
       }
 
@@ -152,9 +152,9 @@ describe('match', () => {
       it('supports AND conditional', () => {
         const output = input.map(match(
           pattern =>
-            pattern.and({protocol:'AMQP'}, {i:5}) && ((o => o.i)(pattern.value))
-            || pattern.and({protocol:'HTTP'}, {i:10}) && ((o => o.i)(pattern.value))
-            || pattern() && ((o => 0)(pattern.value))
+            pattern.and({protocol:'AMQP'}, {i:5}) && (o => o.i)
+            || pattern.and({protocol:'HTTP'}, {i:10}) && (o => o.i)
+            || pattern() && (o => 0)
         ));
 
         t.deepEqual(output, [10, 0, 5, 0]);
@@ -168,9 +168,9 @@ describe('match', () => {
         function parseArgument(arg){
           return match(
             pattern =>
-              pattern.or("-h", "--help") &&  (() => displayHelp)(pattern.value)
-              || pattern.or("-v", "--version") && (() => displayVersion)(pattern.value)
-              || pattern() && (whatever => unknownArgument.bind(null, whatever))(pattern.value)
+              pattern.or("-h", "--help") &&  (() => displayHelp)
+              || pattern.or("-v", "--version") && (() => displayVersion)
+              || pattern() && (whatever => unknownArgument.bind(null, whatever))
           )(arg);
         }
 
