@@ -148,7 +148,7 @@ describe('match', () => {
       t.deepEqual(invalidEmails, ['hey.com', 'wat']);
     });
 
-    describe('when.and', () => {
+    describe('pattern.and', () => {
       it('supports AND conditional', () => {
         const output = input.map(match(
           p => p.with
@@ -161,7 +161,7 @@ describe('match', () => {
       })
     });
 
-    describe('when.or', () => {
+    describe('pattern.or', () => {
       it('supports OR conditional matching', () => {
         // example from https://kerflyn.wordpress.com/2011/02/14/playing-with-scalas-pattern-matching/
 
@@ -197,7 +197,7 @@ describe('match', () => {
     })
   });
 
-  describe('when.range', () => {
+  describe('pattern.range', () => {
     const rangeStart = 0,
       rangeEnd = 5;
 
@@ -249,7 +249,7 @@ describe('match', () => {
             || p() && '< 0, or > 100'
         ));
 
-        var expected = ['< answer', 'answer', '> answer', '< 0, or > 100']
+        var expected = ['< answer', 'answer', '> answer', '< 0, or > 100'];
 
         t.deepEqual(result, expected);
       });
