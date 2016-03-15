@@ -118,7 +118,7 @@ describe('match', () => {
         return match(
           p => p.with
             || p([]) && (o => 0)
-            || p.headTail() && (((head, tail) => 1 + length(tail))(p.head, p.tail))
+            || p(p.head, p.tail) && ((head, tail) => 1 + length(tail))
         )(list);
       }
 

@@ -1,5 +1,8 @@
 'use strict';
 
+const headSymbol = Symbol('match.pattern.head');
+const tailSymbol = Symbol('match.pattern.tail');
+
 function MissingCatchAllPattern() {
   Error.call(this, 'Missing when() catch-all pattern as last match argument, add [when()]: void 0');
   if (!('stack' in this)){
@@ -29,14 +32,18 @@ function match(/* args... */) {
  */
 function postponeMatch(lambda) {
   const f = value => {
-    const res = lambda(patternizor(value));
+    const pattern = patternizor(value);
+    const res = lambda(pattern);
 
     if (res === false) {
       throw new MissingCatchAllPattern();
     }
 
     if (typeof res === 'function') {
-      return res(value);
+      if(!Array.isArray(pattern.value)){
+        return res(pattern.value);
+      }
+      return res.apply(pattern, pattern.value);
     }
 
     return res;
@@ -60,18 +67,32 @@ function immediateMatch(lambda, value) {
  * scope
  *
  *
- * @param {mixed} value Value to match
+ * @param {*} value Value to match
  * @returns {pattern}
  */
 function patternizor(value) {
   /**
-   *
-   * @param mixed against undefined to match everything, elsewhere value to match against
+   * No param -> match everything
+   * 1 param -> match against it
+   * 2 params -> maybe head,tail ?
    * @returns {boolean} Simple matching result
    */
-  function pattern(against) {
-    return against === undefined || _matching(against, value);
-  };
+  function pattern(/* args... */) {
+    const args = Array.from(arguments);
+
+    switch (args.length) {
+      case 0:
+        return true;
+      case 1:
+        return _matching(args[0], value);
+      case 2:
+        if (args[0] === headSymbol && args[1] === tailSymbol) {
+          return pattern.headTail();
+        }
+    }
+
+    return false;
+  }
 
   /**
    * @param start
@@ -95,8 +116,8 @@ function patternizor(value) {
     if (value.length === 0) {
       return false;
     }
-    pattern.head = value[0];
-    pattern.tail = value.slice(1);
+
+    pattern.value = [value[0], value.slice(1)];
 
     return true;
   };
@@ -123,13 +144,18 @@ function patternizor(value) {
    * @type {mixed} Store and expose the value to be used in the right member of the pattern
    * matching
    */
-  pattern.value = value;
+  if (pattern.value === undefined) {
+    pattern.value = value;
+  }
 
   /**
    * Syntactic sugar to have the || in front of all the patterns (even the first)
    * @type {boolean}
    */
   pattern.with = false;
+
+  pattern.head = headSymbol;
+  pattern.tail = tailSymbol;
 
   return pattern;
 }
