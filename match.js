@@ -120,13 +120,19 @@ function patternizor(value) {
     const args = Array.from(arguments);
 
     return args.some((arg) => _matching(arg, value));
-  }
+  };
 
   /**
    * @type {mixed} Store and expose the value to be used in the right member of the pattern
    * matching
    */
   pattern.value = value;
+
+  /**
+   * Syntactic sugar to have the || in front of all the patterns (even the first)
+   * @type {boolean}
+   */
+  pattern.with = false;
 
   /**
    * Yes, the use || and && is a little workaround...
